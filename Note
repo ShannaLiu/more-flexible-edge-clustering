@@ -1,0 +1,22 @@
+Idea: Build the hierarchical structure based on 'homogeneity'
+      'edgepooling' strategy
+
+Define a score for each edge to represent the dissimilarity between the corresponding two nodes
+    - can be learned using a linear layer based on the embedding of two nodes 
+        to make the score symmetric, use ni | nj + nj | ni
+    - can use p-dimenional distance of the embeddings xi & xj
+
+Record node_min_score for each node as the minimum score.
+
+
+
+Search 'strict' clusters. Define p1, p2 (p1 < p2) (quantiles):
+    - collapse edge that has a score < quantile(node_min_score, p1), which involves p1 * N nodes, and may generate 1 - p1*N/2 clusters.
+    - keep independent node that has node_min_score > quantile(node_min_score, p2), which involves (1-p2)*N nodes.
+    This step decides the number of clusters. Nodes in strict clusters will not have overlap.
+
+Remove nodes that are in strict clusters. Define 'soft' clusters for the rest of nodes based on their connectivity.
+
+Assign 'soft' clusters to strict clusters if they are connected. Soft clusters are allowed to be assigned to multiple clusters as long as they are connected.
+
+
