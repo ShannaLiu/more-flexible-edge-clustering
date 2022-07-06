@@ -8,7 +8,7 @@ from torch import softmax as softmax
 
 '''
 score_method: int / 'lin' 'softmax' 'tanh' 'sigmoid'
-aggregate_method
+aggregate_method='avg', 'min', 'max' (score uased as node_score)
 '''
 
 class pooling(torch.nn.Module):
@@ -60,7 +60,7 @@ class pooling(torch.nn.Module):
                 print('Wrong method input')
         return edge_score
     
-
+    # project the score of egdes to nodes
     def get_node_score(self, edge_score=torch.tensor([]), edge_index=torch.tensor([])):
         num_nodes = torch.max(edge_index) + 1
         node_min_score = torch.tensor([])
@@ -90,11 +90,14 @@ class pooling(torch.nn.Module):
         strict_clustered_nodes = torch.tensor([])
         # strict connected clusters
         for i in range(edge_score.shape[0]):
+            # Edge that has a score lower than the lower_bound
             if edge_score[i].item() <= edge_sep:
+                # Neither of the nodes have been assigned to a clsuter
                 if (edge_index[0,i] not in strict_clustered_nodes) & (edge_index[1,i] not in strict_clustered_nodes):
                     strict_clustered_nodes = torch.cat([strict_clustered_nodes, edge_index[0,i,None], edge_index[1,i,None]], 0)
                     num_cluster += 1
                     strict_dict[num_cluster] = edge_index[:,i]
+                # One of the node has been assigned to a cluster
                 elif (edge_index[0,i]in strict_clustered_nodes) & (edge_index[1,i] not in strict_clustered_nodes):
                     strict_clustered_nodes = torch.cat([strict_clustered_nodes, edge_index[1,i,None]], 0)
                     for key, value in strict_dict.items():
@@ -107,6 +110,7 @@ class pooling(torch.nn.Module):
                         if edge_index[1,i].item() in value:
                             cluster_ind = key
                     strict_dict[cluster_ind] = torch.concat([strict_dict[cluster_ind], edge_index[0,i,None]])
+                # The two nodes are assigned to different cluster, need to combine the two clusters into one cluster
                 elif (edge_index[0,i] in strict_clustered_nodes) & (edge_index[1,i] in strict_clustered_nodes):
                     for key, value in strict_dict.items():
                         if edge_index[0,i].item() in value:
@@ -134,6 +138,7 @@ class pooling(torch.nn.Module):
         num_cluster = -1
         # First, form the soft clusters
         for i in range(edge_score.shape[0]):
+            # one node in strict cluster, the other node not in strict cluster, add a soft cluster if the node is not in any soft_cluster
             if (edge_index[0,i] not in strict_clustered_nodes) & (edge_index[1,i] in strict_clustered_nodes):
                 if edge_index[0,i] not in soft_clustered_nodes:
                     num_cluster += 1
@@ -146,21 +151,21 @@ class pooling(torch.nn.Module):
                     soft_dict[num_cluster] = edge_index[1,i,None]
                     soft_clustered_nodes = torch.cat([soft_clustered_nodes, edge_index[1,i,None]], 0)
 
-
+            # neither of the nodes are in strict_cluster
             elif (edge_index[0,i] not in strict_clustered_nodes) & (edge_index[1,i] not in strict_clustered_nodes):
+                # neither of the nodes are in soft_cluster, add a new soft_cluster
                 if (edge_index[0,i] not in soft_clustered_nodes) & (edge_index[1,i] not in soft_clustered_nodes):
                     num_cluster += 1
                     soft_dict[num_cluster] = edge_index[:,i]  
                     soft_clustered_nodes = torch.cat([soft_clustered_nodes, edge_index[0,i,None], edge_index[1,i,None]], 0)
-
-
+                # one of the node is in soft_cluster, add the other node in the same cluster
                 elif (edge_index[0,i] in soft_clustered_nodes) & (edge_index[1,i] not in soft_clustered_nodes):
                     for key, value in soft_dict.items():
                         if edge_index[0,i].item() in value:
                             cluster_ind = key
                     soft_dict[cluster_ind] = torch.cat([soft_dict[cluster_ind], edge_index[1,i,None]], 0)
                     soft_clustered_nodes = torch.cat([soft_clustered_nodes, edge_index[1,i,None]], 0)
-
+                # The two nodes are in different soft_clusters, combine the two nodes together
                 elif (edge_index[1,i] in soft_clustered_nodes) & (edge_index[0,i] not in soft_clustered_nodes):
                     soft_clustered_nodes = torch.cat([soft_clustered_nodes, edge_index[0,i,None]], 0)
                     for key, value in soft_dict.items():
